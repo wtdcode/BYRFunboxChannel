@@ -73,7 +73,11 @@ for box in r[::-1]:
                 else:
                     bot.send_photo(chat_id=config['telegram']['chat_id'], photo=f) # omit alt intentionally.
                 time.sleep(3)
-        db[box['datetime']] = box
+        db[box['datetime']] = {
+            'status': 0,
+            'index': 0,
+            "box": box
+        }
     except telegram.error.TelegramError:
         db[box['datetime']] = {
             'status': -1,
