@@ -93,7 +93,7 @@ for box in r[::-1]:
                 start_index = index + 1
         db[box['datetime']] = {
             'status': 0,
-            'index': 0,
+            'index': start_index,
             "box": box
         }
     except telegram.error.TelegramError as e:
