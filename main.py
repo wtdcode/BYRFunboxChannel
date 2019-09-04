@@ -16,6 +16,19 @@ funbox_url = f"{website_url}/log.php?action=funbox"
 
 bot = telegram.Bot(token=config['bot']['token'])
 
+def find_all_image(root):
+    result = []
+    def _impl(current):
+        children = current.getchildren()
+        if len(children) == 0:
+            if current.tag == "img" and "onclick" in current.attrib and "onmouseover" in current.attrib:
+                result.append(current)
+        else:
+            for child in children:
+                _impl(child)
+    _impl(root)
+    return result
+
 def download_tmp_image(url, fp:tempfile.TemporaryFile):
     resp = requests.get(url, headers=config['headers'])
     fp.write(resp.content)
@@ -36,16 +49,15 @@ def get_funbox_metadata(page = 0):
         title = title_tr.getchildren()[1].text_content()
         datetime = datetime_tr.getchildren()[1].getchildren()[0].attrib['title']
         contents = []
-        for e in content_tr.getchildren()[1].getchildren():
-            if e.tag == "img":
-                alt = e.attrib['alt']
-                src = f"{website_url}/{e.attrib['src']}"
-                if src.endswith(".thumb.jpg"):
-                    src = src.replace(".thumb.jpg", "")
-                contents.append({
-                    "alt": alt,
-                    "src": src
-                })
+        for e in find_all_image(content_tr):
+            alt = e.attrib['alt']
+            src = f"{website_url}/{e.attrib['src']}"
+            if src.endswith(".thumb.jpg"):
+                src = src.replace(".thumb.jpg", "")
+            contents.append({
+                "alt": alt,
+                "src": src
+            })
         result.append({
             "title" : title,
             "datetime": datetime,
@@ -55,16 +67,21 @@ def get_funbox_metadata(page = 0):
                 
 r = get_funbox_metadata()
 for box in r[::-1]:
-    if box['datetime'] in db and db[box['datetime']]['status'] == 0:
+    dtm = box['datetime']
+    if dtm in db and db[dtm]['status'] == 0 and db[dtm]['index'] == len(box['contents']):
         db[box['datetime']] = {
             "status" : 0,
-            "index" : 0,
+            "index" : len(box['contents']),
             "box": box
         }
         continue
+    if dtm in db:
+        start_index = db[dtm]['index']
+    else:
+        start_index = 0
     try:
         bot.send_message(chat_id=config['telegram']['chat_id'], text=f"time:{box['datetime']}\ntitle:{box['title']}")
-        for index, content in enumerate(box['contents']):
+        for index, content in enumerate(box['contents'][start_index:]):
             with tempfile.TemporaryFile() as f:
                 download_tmp_image(content['src'], f)
                 f.seek(0)
@@ -73,15 +90,16 @@ for box in r[::-1]:
                 else:
                     bot.send_photo(chat_id=config['telegram']['chat_id'], photo=f) # omit alt intentionally.
                 time.sleep(3)
+                start_index = index + 1
         db[box['datetime']] = {
             'status': 0,
             'index': 0,
             "box": box
         }
-    except telegram.error.TelegramError:
+    except telegram.error.TelegramError as e:
         db[box['datetime']] = {
             'status': -1,
-            'index': index,
+            'index': start_index,
             "box": box
         }
         continue
