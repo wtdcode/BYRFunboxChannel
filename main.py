@@ -90,7 +90,7 @@ for box in r[::-1]:
                 else:
                     bot.send_photo(chat_id=config['telegram']['chat_id'], photo=f) # omit alt intentionally.
                 time.sleep(3)
-                start_index = index + 1
+                start_index += index + 1
         db[box['datetime']] = {
             'status': 0,
             'index': start_index,
