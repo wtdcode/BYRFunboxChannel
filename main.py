@@ -4,6 +4,7 @@ import pyquery
 import telegram
 import tempfile
 import time
+from PIL import Image
 
 with open("./config.json") as f:
     config = json.load(f)
@@ -21,7 +22,7 @@ def find_all_image(root):
     def _impl(current):
         children = current.getchildren()
         if len(children) == 0:
-            if current.tag == "img" and "onclick" in current.attrib and "onmouseover" in current.attrib:
+            if current.tag == "img" and "onclick" in current.attrib and "onclick" in current.attrib:
                 result.append(current)
         else:
             for child in children:
@@ -51,7 +52,10 @@ def get_funbox_metadata(page = 0):
         contents = []
         for e in find_all_image(content_tr):
             alt = e.attrib['alt']
-            src = f"{website_url}/{e.attrib['src']}"
+            if e.attrib['src'].startswith("http"):
+                src = e.attrib['src']
+            else:
+                src = f"{website_url}/{e.attrib['src']}"
             if src.endswith(".thumb.jpg"):
                 src = src.replace(".thumb.jpg", "")
             contents.append({
@@ -68,7 +72,7 @@ def get_funbox_metadata(page = 0):
 r = get_funbox_metadata()
 for box in r[::-1]:
     dtm = box['datetime']
-    if dtm in db and db[dtm]['status'] == 0 and db[dtm]['index'] == len(box['contents']):
+    if dtm in db and db[dtm]['status'] == 0 and db[dtm]['index'] >= len(box['contents']):
         db[box['datetime']] = {
             "status" : 0,
             "index" : len(box['contents']),
@@ -85,7 +89,10 @@ for box in r[::-1]:
             with tempfile.TemporaryFile() as f:
                 download_tmp_image(content['src'], f)
                 f.seek(0)
-                if content['src'].endswith("gif"):
+                img = Image.open(f)
+                l, r = img.size
+                f.seek(0)
+                if l / r >= 5 or r / l >= 5 or content['src'].endswith("gif"):
                     bot.send_document(chat_id=config['telegram']['chat_id'], document=f, filename="1.gif")
                 else:
                     bot.send_photo(chat_id=config['telegram']['chat_id'], photo=f) # omit alt intentionally.
